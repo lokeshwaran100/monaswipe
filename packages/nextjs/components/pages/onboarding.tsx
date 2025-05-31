@@ -3,53 +3,90 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import { signIn, useSession, signOut } from 'next-auth/react'
 import { ArrowRight, LogIn, Menu } from 'lucide-react'
 import { createUser } from '@/lib/dbOperations'
 import Link from 'next/link'
 import Image from 'next/image'
+import { usePrivy } from '@privy-io/react-auth'
 
 export function OnboardingPage() {
   const router = useRouter()
-  const { data: session, status } = useSession();
+  const { 
+    login, 
+    authenticated, 
+    ready, 
+    user,
+    createWallet 
+  } = usePrivy();
   const [defaultAmount, setDefaultAmount] = useState('')
   const [walletAddress, setWalletAddress] = useState('')
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    console.log(session);
-    // Check if user is authenticated and has email
-    if (status === 'authenticated' && session?.user?.email) {
+    if (authenticated && user?.email) {
       const initUser = async () => {
-        await createUser(session?.user?.email as string);
+        try {
+          // Create user in MongoDB
+          const email = user.email?.toString() || '';
+          await createUser(email);
+          
+          // Create Privy wallet if user doesn't have one
+          if (!user.wallet) {
+            setIsLoading(true);
+            try {
+              const wallet = await createWallet();
+              
+              // Store wallet address in MongoDB
+              await fetch('/api/wallet', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  email: email,
+                  walletAddress: wallet.address,
+                  provider: 'privy'
+                }),
+              });
+              
+              setWalletAddress(wallet.address);
+            } catch (error) {
+              console.error('Error creating wallet:', error);
+            } finally {
+              setIsLoading(false);
+            }
+          } else {
+            setWalletAddress(user.wallet.address);
+          }
+        } catch (error) {
+          console.error('Error initializing user:', error);
+        }
       };
       initUser();
-      // Call the wallet API with email as query parameter
-      // fetch(`/api/wallet?email=${encodeURIComponent(session.user.email)}`, {
-      //   method: 'GET',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   }
-      // })
-      //   .then(res => res.json())
-      //   .then(data => {
-      //     if (data.success) {
-      //       setWalletAddress(data.data.walletAddress)
-      //     } else {
-      //       console.error('Failed to create/fetch wallet:', data.error)
-      //     }
-      //   })
-      //   .catch(error => {
-      //     console.error('Error accessing wallet API:', error);
-      //     signOut();
-      //   })
     }
-  }, [session, status])
+  }, [authenticated, user, createWallet]);
+
+  const handleSignIn = async () => {
+    try {
+      setIsLoading(true);
+      await login();
+    } catch (error) {
+      console.error('Error signing in:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleContinue = () => {
-    if (session && defaultAmount && walletAddress) {
+    if (authenticated && defaultAmount && walletAddress) {
       router.push('/categories')
     }
+  }
+
+  // Wait for Privy to be ready
+  if (!ready) {
+    return <div>Loading...</div>;
   }
 
   return (
@@ -74,8 +111,14 @@ export function OnboardingPage() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex gap-4">
-            <button className="text-gray-300 hover:text-white transition">Login</button>
-            <button className="text-gray-300 hover:text-white transition">Register</button>
+            {authenticated ? (
+              <span className="text-gray-300">{user?.email?.toString()}</span>
+            ) : (
+              <>
+                <button className="text-gray-300 hover:text-white transition">Login</button>
+                <button className="text-gray-300 hover:text-white transition">Register</button>
+              </>
+            )}
           </div>
         </div>
 
@@ -87,8 +130,14 @@ export function OnboardingPage() {
             className="absolute top-full left-0 right-0 bg-black/90 backdrop-blur-lg md:hidden border-b border-white/10"
           >
             <div className="flex flex-col p-4 gap-4">
-              <button className="text-gray-300 hover:text-white transition text-left">Login</button>
-              <button className="text-gray-300 hover:text-white transition text-left">Register</button>
+              {authenticated ? (
+                <span className="text-gray-300">{user?.email?.toString()}</span>
+              ) : (
+                <>
+                  <button className="text-gray-300 hover:text-white transition text-left">Login</button>
+                  <button className="text-gray-300 hover:text-white transition text-left">Register</button>
+                </>
+              )}
             </div>
           </motion.div>
         )}
@@ -117,13 +166,14 @@ export function OnboardingPage() {
             transition={{ delay: 0.2 }}
             className="w-full max-w-md mx-auto space-y-6 p-6 md:p-8 bg-black/30 backdrop-blur-lg rounded-2xl border border-white/10"
           >
-            {!session ? (
+            {!authenticated ? (
               <button
-                onClick={() => signIn('google')}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 text-white rounded-lg p-3 md:p-4 hover:opacity-90 transition text-sm md:text-base"
+                onClick={handleSignIn}
+                disabled={isLoading}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 text-white rounded-lg p-3 md:p-4 hover:opacity-90 transition text-sm md:text-base disabled:opacity-50"
               >
                 <LogIn className="w-4 h-4 md:w-5 md:h-5" />
-                Sign in with Google
+                {isLoading ? 'Signing in...' : 'Sign in with Google'}
               </button>
             ) : (
               <div className="space-y-4 md:space-y-6">
@@ -141,7 +191,7 @@ export function OnboardingPage() {
                 <Link href="/categories" className="block">
                   <button
                     onClick={handleContinue}
-                    disabled={!defaultAmount}
+                    disabled={!defaultAmount || !walletAddress}
                     className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 text-white rounded-lg p-3 md:p-4 hover:opacity-90 transition disabled:opacity-50 text-sm md:text-base"
                   >
                     Get Started
