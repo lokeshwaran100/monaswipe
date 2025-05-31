@@ -80,7 +80,7 @@ export function OnboardingPage() {
 
   const handleContinue = () => {
     if (authenticated && defaultAmount && walletAddress) {
-      router.push('/categories')
+      router.push('/categories');
     }
   }
 
@@ -178,7 +178,7 @@ export function OnboardingPage() {
             ) : (
               <div className="space-y-4 md:space-y-6">
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium text-gray-300">Default Buy Amount (Base ETH)</span>
+                  <span className="text-sm font-medium text-gray-300">Default Buy Amount (Monad)</span>
                   <input
                     type="number"
                     value={defaultAmount}
@@ -188,16 +188,14 @@ export function OnboardingPage() {
                     step="0.01"
                   />
                 </label>
-                <Link href="/categories" className="block">
-                  <button
-                    onClick={handleContinue}
-                    disabled={!defaultAmount || !walletAddress}
-                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 text-white rounded-lg p-3 md:p-4 hover:opacity-90 transition disabled:opacity-50 text-sm md:text-base"
-                  >
-                    Get Started
-                    <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
-                  </button>
-                </Link>
+                <button
+                  onClick={handleContinue}
+                  disabled={!defaultAmount || !walletAddress}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 text-white rounded-lg p-3 md:p-4 hover:opacity-90 transition disabled:opacity-50 text-sm md:text-base"
+                >
+                  Get Started
+                  <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
+                </button>
               </div>
             )}
           </motion.div>
